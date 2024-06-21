@@ -1,0 +1,74 @@
+version: '3.7'
+
+services:
+  kafka:
+    image: bitnami/kafka:latest
+    restart: on-failure
+    ports:
+      - 9092:9092
+    environment:
+      - KAFKA_CFG_BROKER_ID=1
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_NUM_PARTITIONS=3
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    #healthcheck:
+      #test: curl --fail http://localhost:9092 || exit 1 # Command to check health.
+      #interval: 10s # Interval between health checks.
+      #timeout: 10s # Timeout for each health checking.
+      #retries: 30 # Hou many times retries.
+      #start_period: 15s
+    depends_on:
+      - zookeeper
+        #condition: service_healthy
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter 
+    command: ["--kafka.server=kafka:9092"]
+    ports:
+      - 9308:9308 
+    depends_on:
+      - kafka
+    restart: always
+        
+
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    ports:
+      - 2181:2181
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    depends_on:
+      - zookeeper
+      - kafka
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=KAFKA
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-remote-write-receiver'
+      - '--enable-feature=native-histograms'
+  
+
+volumes:
+  prometheus_data:
